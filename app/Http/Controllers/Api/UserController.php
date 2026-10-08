@@ -7,29 +7,53 @@ use App\Http\Requests\BulkStoreUsersRequest;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        return response()->json(User::all());
+        [$perPage, $page] = $this->paginationParameters($request);
+
+        return response()->json(User::query()
+            ->orderBy('id')
+            ->paginate($perPage, ['*'], 'page', $page));
     }
 
-    public function emails(): JsonResponse
+    public function emails(Request $request): JsonResponse
     {
-        return response()->json(User::all(['id', 'email']));
+        [$perPage, $page] = $this->paginationParameters($request);
+
+        return response()->json(User::query()
+            ->orderBy('id')
+            ->paginate($perPage, ['id', 'email'], 'page', $page));
     }
 
-    public function overTwenty(): JsonResponse
+    public function overTwenty(Request $request): JsonResponse
     {
-        $cutoff = Carbon::now()->subYears(20)->startOfDay();
+        [$perPage, $page] = $this->paginationParameters($request);
+        $cutoff = Carbon::now()->subYears(20)->toDateString();
 
-        $users = User::all()->filter(
-            fn (User $user) => $user->birth_date && $user->birth_date->lte($cutoff)
-        )->values();
+        $users = User::query()
+            ->where('birth_date', '<=', $cutoff)
+            ->orderBy('id')
+            ->paginate($perPage, ['*'], 'page', $page);
 
         return response()->json($users);
+    }
+
+    private function paginationParameters(Request $request): array
+    {
+        $validated = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:200'],
+        ]);
+
+        return [
+            (int) ($validated['per_page'] ?? 50),
+            (int) ($validated['page'] ?? 1),
+        ];
     }
 
     public function bulkStore(BulkStoreUsersRequest $request): JsonResponse
